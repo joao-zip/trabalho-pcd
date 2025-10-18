@@ -1,2 +1,4 @@
-# trabalho-pcd
-Final project for the Concurrent and Distributed Programming classes
+# Projeto Final : PCD
+
+Nome: João Pedro Martins Oliveira
+Nome: Mateus Pereira Campanha
