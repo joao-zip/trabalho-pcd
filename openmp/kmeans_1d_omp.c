@@ -98,28 +98,53 @@ static double assignment_step_1d(const double *X, const double *C, int *assign, 
     return sse;
 }
 
-/* update: média dos pontos de cada cluster (1D)
-   se cluster vazio, copia X[0] (estratégia naive) */
-static void update_step_1d(const double *X, double *C, const int *assign, int N, int K){
-    double *sum = (double*)calloc((size_t)K, sizeof(double));
-    int *cnt = (int*)calloc((size_t)K, sizeof(int));
-    if(!sum || !cnt){ fprintf(stderr,"Sem memoria no update\n"); exit(1); }
+static void update_step_1d(const double *X, double *C, const int *assign, int N, int K) {
+    double *sum_global = (double*) calloc((size_t)K, sizeof(double));
+    int *cnt_global = (int*) calloc((size_t)K, sizeof(int));
+    if(!sum_global || !cnt_global) { 
+        fprintf(stderr, "Sem memoria no update (global)\n"); 
+        exit(1); 
+    }
 
-    #pragma omp paralell for
-    for(int i=0;i<N;i++){
-        int a = assign[i];
-
-        #pragma omp critical 
-        {
-            cnt[a] += 1;
-            sum[a] += X[i];
+    #pragma omp parallel
+    {
+        double *sum_local = (double*) calloc((size_t)K, sizeof(double));
+        int *cnt_local = (int*) calloc((size_t)K, sizeof(int));
+        if(!sum_local || !cnt_local) { 
+            fprintf(stderr, "Sem memoria no update (local)\n");
+            exit(1); 
         }
+
+        #pragma omp for nowait
+        for(int i=0; i<N; i++){
+            int a = assign[i];
+            cnt_local[a] += 1;
+            sum_local[a] += X[i];
+        }
+
+        for(int c=0; c<K; c++) {
+            #pragma omp atomic
+            sum_global[c] += sum_local[c];
+
+            #pragma omp atomic
+            cnt_global[c] += cnt_local[c];
+        }
+
+        #pragma omp barrier
+
+        free(sum_local);
+        free(cnt_local);
     }
-    for(int c=0;c<K;c++){
-        if(cnt[c] > 0) C[c] = sum[c] / (double)cnt[c];
-        else           C[c] = X[0]; /* simples: cluster vazio recebe o primeiro ponto */
+
+    for(int c=0; c<K; c++) {
+        if(cnt_global[c] > 0) 
+            C[c] = sum_global[c] / (double)cnt_global[c];
+        else 
+            C[c] = X[0]; /* simples: cluster vazio recebe o primeiro [cite: 239] */
     }
-    free(sum); free(cnt);
+
+    free(sum_global); 
+    free(cnt_global);
 }
 
 static void kmeans_1d(const double *X, double *C, int *assign,
@@ -166,13 +191,13 @@ int main(int argc, char **argv){
     int *assign = (int*)malloc((size_t)N * sizeof(int));
     if(!assign){ fprintf(stderr,"Sem memoria para assign\n"); free(X); free(C); return 1; }
 
-    clock_t t0 = clock();
+    double t0 = omp_get_wtime();
     int iters = 0; double sse = 0.0;
     kmeans_1d(X, C, assign, N, K, max_iter, eps, &iters, &sse);
-    clock_t t1 = clock();
-    double ms = 1000.0 * (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double t1 = omp_get_wtime();
+    double ms = 1000.0 * (t1 - t0);
 
-    printf("K-means 1D (naive)\n");
+    printf("K-means 1D (OpenMP)\n");
     printf("N=%d K=%d max_iter=%d eps=%g\n", N, K, max_iter, eps);
     printf("Iterações: %d | SSE final: %.6f | Tempo: %.1f ms\n", iters, sse, ms);
 
