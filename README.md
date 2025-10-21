@@ -12,8 +12,6 @@ O projeto está organizado da seguinte forma:
 
 ├── openmp/           # Contém o código-fonte e executável da versão OpenMP
 
-├── gerador_dados.py  # Script para criar os datasets
-
 └── README.md         # Este arquivo
 
 ## Geração dos Datasets
