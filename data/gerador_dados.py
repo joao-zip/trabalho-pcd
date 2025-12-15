@@ -11,30 +11,36 @@ def gerar_dados_kmeans(N, K, arquivo_dados, arquivo_centroides, seed=42):
         K (int): Número de clusters (e centróides).
         arquivo_dados (str): Caminho para salvar os pontos de dados.
         arquivo_centroides (str): Caminho para salvar os centróides iniciais.
-        seed (int): Semente para reprodutibilidade dos resultados[cite: 105].
+        seed (int): Semente para reprodutibilidade dos resultados.
     """
     print(f"Gerando {N} pontos para {K} clusters...")
     np.random.seed(seed)
     random.seed(seed)
 
     # 1. Gerar os centróides "reais" em torno dos quais os dados se agruparão
-    # Por exemplo, para K=4, podemos ter clusters em torno de 100, 500, 900, 1300.
-    centros_reais = [i * 400 + np.random.uniform(-50, 50) for i in range(K)]
+    # Espaçamento entre clusters para evitar sobreposição
+    espacamento = max(1000, N // 100)
+    centros_reais = [i * espacamento + np.random.uniform(-espacamento*0.1, espacamento*0.1) for i in range(K)]
     
-    # 2. Gerar os pontos de dados agrupados em torno desses centros
+    # 2. Gera os pontos de dados agrupados em torno desses centros
     pontos = []
     pontos_por_cluster = N // K
-    desvio_padrao = 50
+    resto = N % K
+    desvio_padrao = espacamento * 0.15  # 15% do espaçamento
 
-    for centro in centros_reais:
-        cluster = np.random.normal(loc=centro, scale=desvio_padrao, size=pontos_por_cluster)
+    for idx, centro in enumerate(centros_reais):
+        # Distribuir pontos restantes nos primeiros clusters
+        size = pontos_por_cluster + (1 if idx < resto else 0)
+        cluster = np.random.normal(loc=centro, scale=desvio_padrao, size=size)
         pontos.extend(cluster)
 
     # Embaralhar os pontos
     np.random.shuffle(pontos)
 
     # 3. Escolher os centróides iniciais para o algoritmo
-    centroides_iniciais = random.sample(pontos, K)
+    # Usar uma estratégia mais realista: selecionar pontos espaçados
+    indices = np.linspace(0, len(pontos)-1, K, dtype=int)
+    centroides_iniciais = [pontos[i] for i in indices]
 
     # 4. Salvar os arquivos no formato CSV de uma coluna [cite: 18]
     np.savetxt(arquivo_dados, pontos, fmt='%.4f')
