@@ -74,7 +74,7 @@ static void write_centroids_csv(const char *path, const double *C, int K){
     fclose(f);
 }
 
-// --- Funções do Kernel K-Means (Adaptadas para processamento local) ---
+// --- Funções do Kernel K-Means(para processamento local) ---
 
 // Calcula assignment local e retorna SSE local
 static double local_assignment(const double *local_X, int local_N, 
@@ -106,7 +106,7 @@ static void local_sums_counts(const double *local_X, int local_N,
                               const int *local_assign, int K,
                               double *local_sum, int *local_cnt)
 {
-    // Zera acumuladores
+    // Zera os acumuladores
     for(int c=0; c<K; c++) {
         local_sum[c] = 0.0;
         local_cnt[c] = 0;
@@ -118,8 +118,6 @@ static void local_sums_counts(const double *local_X, int local_N,
         local_cnt[c] += 1;
     }
 }
-
-// --- Main ---
 
 int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
@@ -143,9 +141,9 @@ int main(int argc, char **argv) {
     double *X_full = NULL;
     int N_total = 0;
     int K = 0;
-    double *C = NULL; // Todos terão cópia de C
+    double *C = NULL; // Todos terão uma cópia de C
 
-    // 1. Leitura de dados (Apenas Rank 0)
+    // Leitura de dados (Apenas Rank 0)
     if(rank == 0) {
         X_full = read_csv_1col(argv[1], &N_total);
         if(!X_full) { fprintf(stderr, "Erro ler dados\n"); MPI_Abort(MPI_COMM_WORLD, 1); }
@@ -156,7 +154,7 @@ int main(int argc, char **argv) {
         C = C_tmp; // Rank 0 já tem C
     }
 
-    // 2. Broadcast de metadados (N e K)
+    // Broadcast de metadados (N e K)
     MPI_Bcast(&N_total, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&K, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -168,12 +166,12 @@ int main(int argc, char **argv) {
     // Broadcast inicial de C 
     MPI_Bcast(C, K, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    // 3. Distribuição dos pontos (Scatterv para suportar N não divisível)
+    // Distribuição dos pontos
     // Calcula quantos pontos cada processo vai receber
     int *sendcounts = NULL;
     int *displs = NULL;
     int local_N = N_total / size;
-    int remainder = N_total % size;
+    int remainder = N_total % size; 
 
     if(rank == 0) {
         sendcounts = (int*)malloc(size * sizeof(int));
@@ -211,10 +209,10 @@ int main(int argc, char **argv) {
 
     for(it = 0; it < max_iter; it++) {
         
-        // A. Assignment Local 
+        // Assignment Local 
         double my_sse = local_assignment(local_X, my_N, C, K, local_assign);
 
-        // B. Redução Global do SSE 
+        // Redução Global do SSE 
         MPI_Allreduce(&my_sse, &global_sse, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
         // Verifica convergência
@@ -226,30 +224,29 @@ int main(int argc, char **argv) {
         }
         prev_sse = global_sse;
 
-        // C. Update Step: Calcular somas locais
+        // Update Step: Calcula as somas locais
         local_sums_counts(local_X, my_N, local_assign, K, local_sum, local_cnt);
 
-        // D. Redução Global de Somas e Contagens [cite: 70]
+        // Redução Global de Somas e Contagens
         // Precisamos somar os vetores de todos os processos
         MPI_Allreduce(local_sum, global_sum, K, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(local_cnt, global_cnt, K, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-        // E. Atualizar Centróides (cada processo faz isso) [cite: 71]
+        // Atualizar Centróides (cada processo faz isso)
         for(int c=0; c<K; c++) {
             if(global_cnt[c] > 0) {
                 C[c] = global_sum[c] / (double)global_cnt[c];
             } else {
-                // Estratégia simples (Naive): manter o antigo ou resetar.
+                // Estratégia: manter o antigo ou resetar.
                 // No código original, copiava X[0]. Em MPI, X[0] global está no rank 0.
-                // Para simplificar e evitar comunicação extra não descrita no PDF,
-                // mantemos o C[c] inalterado se o cluster esvaziar.
+                // Para simplificar, mantemos o C[c] inalterado se o cluster esvaziar.
             }
         }
     }
 
     double end_time = MPI_Wtime();
 
-    // 4. Consolidação dos Resultados (Assign) no Rank 0
+    // Consolidação dos Resultados (assign) no Rank 0
     // Opcional: só se o usuário pediu arquivo de saída
     int *full_assign = NULL;
     if(rank == 0 && outAssign) {
@@ -262,7 +259,7 @@ int main(int argc, char **argv) {
                     0, MPI_COMM_WORLD);
     }
 
-    // 5. Saída de Dados (Rank 0)
+    // Saída de Dados (Rank 0)
     if(rank == 0) {
         double ms = (end_time - start_time) * 1000.0;
         printf("K-means 1D (MPI) - P=%d\n", size);

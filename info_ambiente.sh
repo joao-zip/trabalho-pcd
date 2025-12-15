@@ -1,28 +1,27 @@
 #!/bin/bash
 
-echo "=============================================="
-echo "  INFORMAÇÕES DO AMBIENTE DE TESTE"
-echo "=============================================="
+echo "=========================================="
+echo " Configuração do Sistema"
+echo "=========================================="
 
-echo -e "\n=== SISTEMA OPERACIONAL ==="
+echo -e "\nSistema Operacional:"
 uname -a
 
-echo -e "\n=== DISTRIBUIÇÃO LINUX ==="
 if [ -f /etc/os-release ]; then
+    echo ""
     cat /etc/os-release | grep -E "PRETTY_NAME|VERSION"
 fi
 
-echo -e "\n=== PROCESSADOR ==="
-lscpu | grep -E "Model name|Architecture|CPU\(s\)|Thread|Core|Socket|CPU MHz|Cache"
+echo -e "\nProcessador:"
+lscpu | grep -E "Model name|Architecture|CPU\(s\):|Thread|Core|Socket|CPU MHz|Cache"
 
-echo -e "\n=== MEMÓRIA ==="
+echo -e "\nMemória:"
 free -h
 
-echo -e "\n=== COMPILADOR GCC ==="
+echo -e "\nCompilador:"
 gcc --version | head -1
 
-echo -e "\n=== SUPORTE OPENMP ==="
-echo "Verificando suporte OpenMP..."
+echo -e "\nOpenMP:"
 cat > /tmp/test_omp.c << 'EOF'
 #include <stdio.h>
 #include <omp.h>
@@ -30,9 +29,9 @@ int main() {
     #pragma omp parallel
     {
         #pragma omp single
-        printf("OpenMP version: %d\n", _OPENMP);
+        printf("Versão: %d\n", _OPENMP);
     }
-    printf("Max threads: %d\n", omp_get_max_threads());
+    printf("Threads disponíveis: %d\n", omp_get_max_threads());
     return 0;
 }
 EOF
@@ -42,27 +41,17 @@ if [ $? -eq 0 ]; then
     /tmp/test_omp
     rm -f /tmp/test_omp /tmp/test_omp.c
 else
-    echo "OpenMP não disponível ou erro na compilação"
+    echo "Não disponível"
 fi
 
-echo -e "\n=== PYTHON ==="
-python3 --version
-
-echo -e "\n=== BIBLIOTECAS PYTHON ==="
-echo "NumPy: $(python3 -c 'import numpy; print(numpy.__version__)' 2>/dev/null || echo 'não instalado')"
-echo "Matplotlib: $(python3 -c 'import matplotlib; print(matplotlib.__version__)' 2>/dev/null || echo 'não instalado')"
-echo "Pandas: $(python3 -c 'import pandas; print(pandas.__version__)' 2>/dev/null || echo 'não instalado')"
-
-echo -e "\n=== RESUMO PARA O RELATÓRIO ==="
-echo "----------------------------------------"
+echo -e "\n=========================================="
+echo " Resumo"
+echo "=========================================="
 echo "Sistema: $(uname -s) $(uname -r)"
 echo "CPU: $(lscpu | grep "Model name" | cut -d: -f2 | xargs)"
-echo "Cores Físicos: $(lscpu | grep "Core(s) per socket" | cut -d: -f2 | xargs)"
-echo "Threads por Core: $(lscpu | grep "Thread(s) per core" | cut -d: -f2 | xargs)"
-echo "Total de Threads: $(lscpu | grep "^CPU(s):" | cut -d: -f2 | xargs)"
-echo "Memória RAM: $(free -h | grep Mem | awk '{print $2}')"
-echo "Compilador: $(gcc --version | head -1)"
-echo "----------------------------------------"
-
-echo -e "\n✓ Coleta de informações concluída!"
-echo "  Copie o resumo acima para o seu relatório."
+echo "Cores: $(lscpu | grep "Core(s) per socket" | cut -d: -f2 | xargs)"
+echo "Threads/Core: $(lscpu | grep "Thread(s) per core" | cut -d: -f2 | xargs)"
+echo "Threads Total: $(lscpu | grep "^CPU(s):" | cut -d: -f2 | xargs)"
+echo "RAM: $(free -h | grep Mem | awk '{print $2}')"
+echo "GCC: $(gcc --version | head -1)"
+echo "=========================================="

@@ -1,0 +1,9 @@
+data/*.csv
+
+info_ambiente.sh
+
+serial/kmeans_1d_naive
+
+openmp/kmeans_1d_omp
+
+mpi/kmeans_1d_mpi

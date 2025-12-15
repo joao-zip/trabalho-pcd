@@ -38,11 +38,11 @@ def gerar_dados_kmeans(N, K, arquivo_dados, arquivo_centroides, seed=42):
     np.random.shuffle(pontos)
 
     # 3. Escolher os centróides iniciais para o algoritmo
-    # Usar uma estratégia mais realista: selecionar pontos espaçados
+    # Usar a estratégia de selecionar pontos espaçados
     indices = np.linspace(0, len(pontos)-1, K, dtype=int)
     centroides_iniciais = [pontos[i] for i in indices]
 
-    # 4. Salvar os arquivos no formato CSV de uma coluna [cite: 18]
+    # 4. Salvar os arquivos no formato CSV de uma coluna
     np.savetxt(arquivo_dados, pontos, fmt='%.4f')
     print(f"Arquivo de dados '{arquivo_dados}' salvo com {len(pontos)} linhas.")
 
