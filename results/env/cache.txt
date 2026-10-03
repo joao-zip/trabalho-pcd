@@ -1,0 +1,5 @@
+# tamanhos de cache por CPU0
+L1 Data: 32K (compartilhada por CPUs: 0,24)
+L1 Instruction: 32K (compartilhada por CPUs: 0,24)
+L2 Unified: 512K (compartilhada por CPUs: 0,24)
+L3 Unified: 32768K (compartilhada por CPUs: 0-5,24-29)

@@ -1,0 +1,4 @@
+version,N,t_min_time,t_min_energy,t_min_edp
+omp,96,48,1,48
+omp,256,24,2,16
+omp,1000,24,8,16

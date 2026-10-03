@@ -1,0 +1,6 @@
+# head -5 /proc/meminfo (em 2026-10-02T23:15:35-03:00)
+MemTotal:       263739952 kB
+MemFree:        224673408 kB
+MemAvailable:   258376408 kB
+Buffers:         2007480 kB
+Cached:         29629668 kB

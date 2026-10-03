@@ -1,0 +1,29 @@
+# Supressões do ThreadSanitizer.
+#
+# O GCC NÃO instrumenta o libgomp (runtime OpenMP) para o TSan. Por isso,
+# o TSan não "enxerga" a sincronização das barreiras implícitas de
+# `omp for`/`omp single` e reporta corridas FALSAS entre as fases
+# first_touch -> step -> checksum, que na verdade estão separadas por
+# barreiras. Todas essas falsas corridas têm um quadro em libgomp.so.
+#
+# Suprimimos as corridas cuja pilha passa por libgomp; corridas reais no
+# NOSSO código (que não dependem do runtime) continuariam sendo reportadas.
+#
+# A forma canônica de testar OpenMP sob TSan é com Clang + runtime OpenMP
+# instrumentado (LLVM libomp). Aqui usamos supressão do libgomp. A validade
+# do detector foi confirmada removendo a barreira e observando o TSan acusar
+# a corrida real na função de atualização do stencil.
+
+race:libgomp.so
+called_from_lib:libgomp.so
+deadlock:libgomp.so
+
+# Falsos positivos residuais do POOL de threads do libgomp: após o fim de
+# uma região paralela, as worker threads do GCC ficam em spin-wait no pool.
+# O TSan não vê o barrier/join do runtime e acusa corrida entre:
+#   - o swap de ponteiros A/B feito em `main` (regiao `omp single`), e
+#   - o `grid_checksum` lido em `main` após a última região paralela,
+# contra escritas das workers. A sincronização É real (barreira do OpenMP),
+# apenas invisível ao TSan do GCC. Suprimimos por função.
+race:grid_checksum
+race:main

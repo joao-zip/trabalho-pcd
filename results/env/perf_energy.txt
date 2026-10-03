@@ -1,0 +1,2 @@
+# sh -c perf list 2>/dev/null | grep -i energy || echo 'sem eventos de energia no perf' (em 2026-10-02T23:15:35-03:00)
+  power/energy-pkg/                                  [Kernel PMU event]

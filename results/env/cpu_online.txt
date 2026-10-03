@@ -1,0 +1,2 @@
+# cat /sys/devices/system/cpu/online (em 2026-10-02T23:15:35-03:00)
+0-47

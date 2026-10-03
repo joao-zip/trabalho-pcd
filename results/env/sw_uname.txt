@@ -1,0 +1,2 @@
+# uname -a (em 2026-10-02T23:15:35-03:00)
+Linux gibbon 6.8.0-111-generic #111~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Apr 14 17:13:45 UTC  x86_64 x86_64 x86_64 GNU/Linux

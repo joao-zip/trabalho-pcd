@@ -1,0 +1,17 @@
+# binarios compilados
+/bin/
+
+# dumps de grade (grandes)
+*.bin
+
+# artefatos temporarios
+*.o
+*.tmp
+
+# resultados: versionar CSVs brutos e analise, mas nao os graficos regenerraveis?
+# Por padrao, versionamos os CSVs (evidencia) e ignoramos apenas o stream binario.
+# (ajuste conforme a politica do repositorio do trabalho)
+
+# Python
+__pycache__/
+*.pyc

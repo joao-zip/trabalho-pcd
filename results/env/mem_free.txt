@@ -1,0 +1,4 @@
+# free -g (em 2026-10-02T23:15:35-03:00)
+               total        used        free      shared  buff/cache   available
+Mem:             251           2         214           0          34         246
+Swap:              1           0           1

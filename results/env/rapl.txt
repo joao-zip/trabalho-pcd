@@ -1,0 +1,7 @@
+# Disponibilidade do RAPL via /sys/class/powercap
+/sys/class/powercap/intel-rapl:0  name=package-0  NAO LEGIVEL (permissao?)  max_range_uj=65532610987
+/sys/class/powercap/intel-rapl:0:0  name=core  NAO LEGIVEL (permissao?)  max_range_uj=65532610987
+
+# Permissoes dos energy_uj:
+-r-------- 1 root root 4096 set 27 14:11 /sys/class/powercap/intel-rapl:0:0/energy_uj
+-r-------- 1 root root 4096 set  1 12:47 /sys/class/powercap/intel-rapl:0/energy_uj

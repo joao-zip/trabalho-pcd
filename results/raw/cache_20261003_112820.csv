@@ -1,0 +1,6 @@
+N,threads,bind,rep,mem_mb,time_s,mlups,l1d_loads,l1d_misses,l2_hits,l2_misses,miss_source
+48,1,close,1,1.7,0.004505,2160.781,nan,nan,nan,nan,none
+64,1,close,1,4.0,0.010324,2308.384,nan,nan,nan,nan,none
+96,1,close,1,13.5,0.035104,2366.075,nan,nan,nan,nan,none
+128,1,close,1,32.0,0.103212,1938.120,nan,nan,nan,nan,none
+160,1,close,1,62.5,0.267818,1472.759,nan,nan,nan,nan,none
