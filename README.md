@@ -1,24 +1,27 @@
-# Difusão de Calor 3D — Saturação de Banda × Eficiência Energética
+# Difusão de Calor 3D: saturação de banda e eficiência energética
 
-Trabalho de Programação Concorrente e Distribuída. Stencil de Jacobi (equação
-do calor 3D, FTCS explícito de 7 pontos) implementado em Sequencial e OpenMP,
-instrumentado para medir tempo, banda efetiva, energia e comportamento de cache.
+Trabalho da disciplina de Programação Concorrente e Distribuída (Unifesp).
+Implementamos um stencil de Jacobi para a equação do calor 3D (esquema
+explícito FTCS de 7 pontos) nas versões sequencial e OpenMP, com
+instrumentação para medir tempo, banda de memória efetiva, energia e
+comportamento de cache.
 
-**Pergunta de pesquisa:** *a partir de quantas threads a saturação da largura
-de banda de memória torna o paralelismo adicional energeticamente ineficiente?*
-
-O estudo é complementado por uma **análise de cache** (varredura do tamanho da
-grade em torno da L3) que identifica o *ponto de virada* onde os dados deixam
-de caber na cache — a causa física da saturação de banda.
+A questão que investigamos: a partir de quantas threads a saturação da banda
+de memória faz com que adicionar mais paralelismo deixe de compensar em
+energia. Para explicar a causa física dessa saturação, incluímos uma análise
+de cache que varre o tamanho da grade em torno da L3 e localiza o ponto em que
+os dados deixam de caber na cache.
 
 ## Modelo numérico
 
-- Grade `N×N×N` de `double`, vetor 1D contíguo, `IDX(i,j,k)=((i*N)+j)*N+k`.
-- Jacobi com dois buffers (`A` lê, `B` escreve, `swap`).
-- `r = α·Δt/Δx² = 0.1` (estável: `r ≤ 1/6`).
-- Contorno de Dirichlet: face `i=0` a 100 °C, demais a 0; interior a 0.
-- Todas as versões usam **a mesma expressão por ponto** e compilam **sem
-  `-ffast-math`** → o resultado paralelo é **bit-a-bit idêntico** ao sequencial.
+- Grade `N×N×N` de `double` em um vetor 1D contíguo, com índice
+  `IDX(i,j,k) = ((i*N)+j)*N + k`.
+- Método de Jacobi com dois buffers: lê de `A`, escreve em `B`, troca.
+- `r = α·Δt/Δx² = 0.1` (condição de estabilidade do FTCS 3D: `r ≤ 1/6`).
+- Contorno de Dirichlet: face `i=0` a 100 °C, demais faces a 0, interior a 0.
+- As duas versões usam a mesma expressão por ponto e são compiladas sem
+  `-ffast-math`, de modo que o resultado paralelo é idêntico ao sequencial
+  bit a bit.
 
 ## Estrutura
 
@@ -36,106 +39,119 @@ results/    env/  raw/  analysis/
 ```bash
 make all          # heat_seq + heat_omp + compare
 ```
-Flags: `-O3 -march=native -std=c11 -Wall -Wextra` (sem `-ffast-math`).
-Binários em `bin/`.
 
-## Uso de um binário
+Flags: `-O3 -march=native -std=c11 -Wall -Wextra`, sem `-ffast-math`. Os
+binários ficam em `bin/`.
+
+## Uso
 
 ```bash
 ./bin/heat_omp -n 256 -i 100 -t 16 \
     --schedule static --first-touch 1 --variant 2 --bind close
 ```
-Imprime uma linha CSV. `--csv-header` mostra o cabeçalho. `--help` lista opções.
 
-Variantes:
-- **OpenMP** `--variant`: `1` região paralela por iteração (fork/join);
-  `2` região única (padrão); `3` `collapse(2)`.
+Cada execução imprime uma linha em CSV. `--csv-header` mostra o cabeçalho e
+`--help` lista as opções.
 
-Afinidade OpenMP via ambiente: `OMP_PROC_BIND` + `OMP_PLACES=cores`.
+Variantes do OpenMP (`--variant`): 1 abre uma região paralela por iteração
+(fork/join); 2 usa uma única região (padrão); 3 aplica `collapse(2)`. A
+afinidade é controlada pelo ambiente (`OMP_PROC_BIND`, `OMP_PLACES=cores`).
 
-## Correção
+## Verificação de correção
 
 ```bash
-# validação analítica (condição senoidal)
+# validação analítica (condição inicial senoidal)
 ./bin/heat_seq -n 128 -i 50 --init sine --validate
-#   vs solução CONTÍNUA  : erro ~ O(dx^2)  (convergência física)
-#   vs autovalor DISCRETO: erro ~ eps de máquina (kernel bit-correto)
+#   vs solução contínua : erro da ordem de O(dx^2)
+#   vs autovalor discreto: erro da ordem do epsilon de máquina
 
-# igualdade paralela = sequencial
+# paralelo deve ser igual ao sequencial
 ./bin/heat_seq -n 96 -i 30 --dump ref.bin
 ./bin/heat_omp -n 96 -i 30 -t 8 --variant 2 --dump out.bin
 ./bin/compare ref.bin out.bin      # Linf = 0
 
-# checagem de corrida (ThreadSanitizer)
+# verificação de condição de corrida (ThreadSanitizer)
 scripts/run_tsan.sh 64 8 4
 ```
 
-Nota sobre o ThreadSanitizer: o GCC não instrumenta o `libgomp`, gerando
-falsos positivos no OpenMP cuja sincronização (barreiras implícitas) é
-invisível ao detector. Suprimimos apenas esses via `tools/tsan.supp`. A
-validade do detector foi confirmada removendo a barreira e observando o TSan
-acusar a corrida real na atualização do stencil.
+Sobre o ThreadSanitizer: o GCC não instrumenta o `libgomp`, o que gera falsos
+positivos no OpenMP, já que a sincronização das barreiras implícitas fica
+invisível ao detector. Esses casos são suprimidos em `tools/tsan.supp`.
+Confirmamos que o detector continua válido removendo a barreira e observando
+o TSan apontar a corrida real na atualização do stencil.
 
-## Medição de energia — sem alterar o estado da máquina
+## Medição de energia
 
-Esta máquina (AMD Threadripper PRO 5965WX) tem `perf_event_paranoid=4` e os
-contadores RAPL em modo `0400` (só root). Para **não alterar estado global**
-(que afetaria outros usuários), a energia é medida por **envelope** com
-`sudo perf stat -a -e power/energy-pkg/` ao redor de cada execução do
-subconjunto principal, subtraindo uma linha de base (`-i 0`). Nada persiste:
-`perf_event_paranoid`, permissões do RAPL e o governor ficam intactos.
+A máquina de testes (AMD Threadripper PRO 5965WX) tem `perf_event_paranoid=4`
+e os contadores RAPL em modo `0400` (leitura só por root). Como é uma máquina
+compartilhada, evitamos alterar o estado global: a energia é medida por
+envelope, com `sudo perf stat -a -e power/energy-pkg/` em torno de cada
+execução do subconjunto principal, subtraindo uma linha de base (`-i 0`).
+Assim `perf_event_paranoid`, as permissões do RAPL e o governor permanecem
+inalterados.
 
-Para habilitar a medição de energia, valide a sessão sudo antes:
+Para medir energia, valide a sessão sudo antes de rodar:
+
 ```bash
-sudo -v                       # (ou configure NOPASSWD para perf)
-scripts/run_experiments.sh    # mede energia no subconjunto principal
+sudo -v
+scripts/run_experiments.sh
 ```
-Sem isso, use `--no-energy`: o estudo de tempo/banda/speedup roda igual e a
-energia sai `NaN` (plano B do enunciado).
 
-**Notas de hardware desta máquina** (registradas em `results/env/`):
-- RAPL AMD expõe só o domínio *package* (sem `dram`) → energia é só do pacote.
-- Governor `schedutil` e turbo ativos (não alteramos, por ser máquina
-  compartilhada). Mitigamos com 15 repetições + **mediana** e registrando a
-  frequência efetiva (`freq_mhz`) em cada linha do CSV.
-- L3 = 4×32 MB (128 MB), 6 cores por CCX. Isso define os tamanhos de grade.
+Sem isso, use `--no-energy`: o estudo de tempo, banda e speedup roda do mesmo
+jeito e a energia sai como `NaN`.
 
-O `scripts/setup_env.sh` (aplicar/`--restore`) existe **apenas** para o caso de
-uso exclusivo da máquina (fixa governor e libera RAPL). **Não é necessário** no
-fluxo por envelope acima e não deve ser usado em máquina compartilhada.
+Observações sobre o hardware (registradas em `results/env/`):
 
-## Reproduzir os experimentos
+- O RAPL dessa CPU AMD expõe apenas o domínio *package* (não há `dram`), então
+  a energia reportada é a do pacote.
+- O governor `schedutil` e o turbo estão ativos. Não os alteramos por ser
+  máquina compartilhada; para reduzir o efeito da variação de frequência,
+  usamos repetições com mediana e registramos a frequência efetiva
+  (`freq_mhz`) em cada linha do CSV.
+- A L3 tem 4 fatias de 32 MB (128 MB no total), uma por CCX de 6 cores. Isso
+  orientou a escolha dos tamanhos de grade.
+
+O `scripts/setup_env.sh` (com `--restore`) serve apenas para o caso de uso
+exclusivo da máquina, em que se pode fixar o governor e liberar o RAPL. Ele
+não é necessário no fluxo por envelope descrito acima.
+
+## Reproduzindo os experimentos
 
 ```bash
 # 1. ambiente
 scripts/env_info.sh                 # -> results/env/
 
-# 2. piloto rápido (valida a pipeline)
+# 2. teste rápido da pipeline
 make all
 scripts/run_experiments.sh --pilot --no-energy
 scripts/run_stream.sh --pilot
 scripts/run_cache.sh --pilot
 
-# 3. bateria completa (algumas horas; rodar com a máquina ociosa)
+# 3. bateria completa (rodar com a máquina ociosa)
 sudo -v
 scripts/run_experiments.sh          # -> results/raw/heat_<stamp>.csv
 scripts/run_stream.sh               # -> results/raw/stream_<stamp>.csv
 scripts/run_cache.sh                # -> results/raw/cache_<stamp>.csv
 
-# 4. análise + gráficos
+# 4. análise e gráficos
 python3 analysis/analyze.py         # -> results/analysis/
 ```
 
-Tamanhos de grade (ajustados à L3 de 128 MB):
-- **N=96** (~14 MB): cabe numa fatia de L3 → regime **compute-bound**.
-- **N=256** (~256 MB): excede a L3 total → regime **memory-bound**.
-- **N=1000** (~16 GB): muito maior que a cache.
+Há também um modo `--fast` em `run_experiments.sh`, que reduz a matriz às
+dimensões que mais importam para a questão central (varredura de threads por
+tamanho de grade, com energia), útil quando não há tempo para a matriz
+completa.
 
-## Análise de cache (`run_cache.sh`)
+Tamanhos de grade usados (em relação à L3 de 128 MB):
 
-Para explicar a *causa física* da saturação de banda, `run_cache.sh` varre o
-tamanho da grade N em torno da L3 e mede os *cache misses* por nível com
-`perf stat` (mesmo envelope `sudo` da energia; não altera estado da máquina):
+- N=96 (cerca de 14 MB): cabe em uma fatia de L3; regime limitado por computação.
+- N=256 (cerca de 256 MB): excede a L3 total; regime limitado por memória.
+- N=1000 (cerca de 16 GB): muito maior que a cache.
+
+## Análise de cache
+
+O script `run_cache.sh` varre o tamanho da grade em torno da L3 e mede eventos
+de cache com `perf stat` (mesmo esquema de envelope da energia):
 
 ```bash
 sudo -v
@@ -143,48 +159,59 @@ scripts/run_cache.sh                # -> results/raw/cache_<stamp>.csv
 python3 analysis/analyze.py         # gera fig_cache_*.png e cache_summary.csv
 ```
 
-A L3 desta máquina são 4 fatias de 32 MB (128 MB total), uma fatia por CCX de
-6 cores. **Esta CPU (AMD Zen 3) não expõe contadores de L3** via `perf`
-(`LLC-*` saem como `<not supported>`), então medimos **L1 e L2** com os
-eventos `L1-dcache-*` e `l2_cache_req_stat.ic_dc_{hit,miss}_in_l2`, e usamos o
-**MLUPS como proxy do comportamento de L3**.
+Essa CPU (AMD Zen 3) não expõe contadores de L3 pelo `perf` (os eventos `LLC-*`
+aparecem como `<not supported>`), então medimos L1 e L2 (`L1-dcache-*` e
+`l2_cache_req_stat.ic_dc_{hit,miss}_in_l2`) e usamos o MLUPS como indicador
+indireto do comportamento da L3.
 
-Com 1 thread, o *ponto de virada* aparece claramente no `fig_cache_mlups.png`:
-o MLUPS **despenca ao cruzar os 32 MB** (fatia de L3 de um CCX) — de ~2370
-MLUPS em N=96 (13 MB) para ~1460 em N=160 (62 MB). A taxa de miss de L2
-permanece estável (~5%) nessa faixa, confirmando que a desaceleração vem do
-**L3** (dados que deixam de caber na fatia e caem para a DRAM), não do L2. A
-cadeia causal do estudo fica: **cache (virada em 32 MB) → saturação de banda
-(gruda no pico do STREAM) → ineficiência energética (curva de energia em “U”)**.
+Com uma thread, o ponto de virada aparece no `fig_cache_mlups.png`: o MLUPS cai
+ao cruzar os 32 MB (tamanho da fatia de L3 de um CCX), de cerca de 2370 MLUPS
+em N=96 (13 MB) para cerca de 1460 em N=160 (62 MB). A taxa de miss de L2 se
+mantém estável (em torno de 5%) nessa faixa, o que indica que a desaceleração
+vem da L3 (os dados deixam de caber na fatia e passam a vir da DRAM), e não da
+L2. A cadeia que o estudo descreve é: a virada de cache em 32 MB leva à
+saturação de banda (a banda efetiva encosta no pico do STREAM), que por sua vez
+leva à ineficiência energética (a curva de energia em função das threads tem
+forma de "U").
 
-> **Limitação de instrumentação (documentada):** sem contadores de L3 nesta
-> AMD, a evidência de L3 é indireta (MLUPS + miss de L2). Os nomes dos eventos
-> variam entre CPUs; confirme com `sudo perf list | grep -iE 'l2|l3|cache'` e
-> ajuste `EVENTS` em `scripts/run_cache.sh`.
+Limitação de instrumentação: sem contadores de L3 nessa máquina, a evidência
+sobre a L3 é indireta (MLUPS mais a miss de L2). Os nomes dos eventos variam
+entre CPUs; confirme com `sudo perf list | grep -iE 'l2|l3|cache'` e ajuste a
+variável `EVENTS` em `scripts/run_cache.sh` conforme necessário.
 
 ## Métricas (calculadas em `analyze.py`)
 
 | Métrica | Fórmula |
 |---|---|
 | MLUPS | `(N-2)³·iters / tempo / 1e6` |
-| Banda efetiva (GB/s) | `MLUPS·1e6·16 / 1e9` (16 B/ponto) |
-| % do pico | banda efetiva / STREAM Triad (mesmos threads+bind) |
+| Banda efetiva (GB/s) | `MLUPS·1e6·16 / 1e9` (16 B por ponto) |
+| % do pico | banda efetiva / STREAM Triad (mesmos threads e bind) |
 | Potência (W) | energia / tempo |
 | EDP | energia · tempo |
 | MLUPS/W | MLUPS / potência |
 | Speedup | `T_seq/T_p` e `T_1/T_p` |
 | Eficiência | speedup / p |
 
-**Interpretação do `% do pico > 100%`:** para N que cabe na cache (ex.: N=96),
-o stencil roda da L3, com banda muito acima da DRAM medida pelo STREAM. Isso é
-**esperado** e indica que o regime **não** é limitado por DRAM — o oposto do
-caso memory-bound (N grande), onde a banda efetiva gruda no pico do STREAM e o
-paralelismo adicional para de compensar.
+Sobre o "% do pico" acima de 100%: para N que cabe na cache (como N=96), o
+stencil roda a partir da L3, com banda bem acima da DRAM medida pelo STREAM.
+Isso é esperado e indica que o regime não é limitado por DRAM, ao contrário do
+caso de N grande, em que a banda efetiva encosta no pico do STREAM e o
+paralelismo adicional deixa de compensar.
 
-## Saída CSV
+## Formato do CSV
 
 ```
 version,variant,N,iters,threads,schedule,bind,first_touch,rep,
 time_s,mlups,gbs,energy_pkg_j,energy_dram_j,checksum,freq_mhz,energy_source
 ```
-`energy_dram_j` é sempre `NaN` nesta CPU AMD (sem domínio DRAM no RAPL).
+
+A coluna `energy_dram_j` é sempre `NaN` nessa CPU AMD, que não tem o domínio
+DRAM no RAPL.
+
+## Dependências
+
+- GCC com suporte a OpenMP (usamos a versão 11).
+- Python 3 com `pandas`, `numpy` e `matplotlib` para a análise.
+- `perf` (pacote `linux-tools`) para medir energia e eventos de cache.
+- O STREAM (McCalpin) está em `tools/stream/stream.c` e é usado como
+  referência de banda de pico; os créditos são do autor original.
